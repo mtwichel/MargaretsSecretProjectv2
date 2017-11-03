@@ -1,7 +1,8 @@
 package com.example.android.margaretssecretprojectv2;
 
+import android.os.AsyncTask;
 import android.os.Bundle;
-import android.support.design.widget.FloatingActionButton;
+import android.os.Environment;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
@@ -17,12 +18,18 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
-import java.util.ArrayList;
+import com.box.sdk.BoxAPIConnection;
+import com.box.sdk.BoxFile;
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.util.List;
 import java.util.Random;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements ServerInterator.ServerResponse {
 
+    private static final String TAG = "MainActivity";
     /**
      * The {@link android.support.v4.view.PagerAdapter} that will provide
      * fragments for each of the sections. We use a
@@ -37,38 +44,23 @@ public class MainActivity extends AppCompatActivity {
      * The {@link ViewPager} that will host the section contents.
      */
     private ViewPager mViewPager;
+    private List<String> data;
+    private Snackbar loadingMessage;
+    private boolean parentMode;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-        List<String> data = new ArrayList<>();
-        for (int i = 0; i < 40; i++) {
-            data.add("test" + i);
-        }
+        loadingMessage = Snackbar.make(findViewById(android.R.id.content), "Loading", Snackbar.LENGTH_INDEFINITE);
 
+        getData();
 
-        // Create the adapter that will return a fragment for each of the three
-        // primary sections of the activity.
-        mSectionsPagerAdapter = new SectionsPagerAdapter(getSupportFragmentManager(), data);
-
-        // Set up the ViewPager with the sections adapter.
-        mViewPager = (ViewPager) findViewById(R.id.container);
-        mViewPager.setAdapter(mSectionsPagerAdapter);
-
-
-        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
-        fab.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                        .setAction("Action", null).show();
-            }
-        });
 
     }
 
@@ -88,11 +80,41 @@ public class MainActivity extends AppCompatActivity {
         int id = item.getItemId();
 
         //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
+        if (id == R.id.action_refresh) {
+            loadingMessage.show();
+            new ServerInterator(this).execute();
             return true;
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    public void getData() {
+        this.data = JSONHelper.importFromJSON(this, this);
+
+        if (!this.parentMode) {
+            for (String s : data) {
+                if (s.substring(0, 1).equals("/")) {
+                    s = s.substring(1);
+                }
+            }
+        }
+
+        if (this.data != null) {
+            // Create the adapter that will return a fragment for each of the three
+            // primary sections of the activity.
+            mSectionsPagerAdapter = new SectionsPagerAdapter(getSupportFragmentManager(), data);
+
+            // Set up the ViewPager with the sections adapter.
+            mViewPager = (ViewPager) findViewById(R.id.container);
+            mViewPager.setAdapter(mSectionsPagerAdapter);
+        }
+    }
+
+    @Override
+    public void processFinish() {
+        getData();
+        loadingMessage.dismiss();
     }
 
     /**
@@ -148,7 +170,11 @@ public class MainActivity extends AppCompatActivity {
         public Fragment getItem(int position) {
             Random rand = new Random();
 
-            return PlaceholderFragment.newInstance((String) data.get(rand.nextInt(data.size())));
+            if (data.size() > 0) {
+                return PlaceholderFragment.newInstance((String) data.get(rand.nextInt(data.size())));
+            } else {
+                return PlaceholderFragment.newInstance("");
+            }
         }
 
         @Override
@@ -169,5 +195,66 @@ public class MainActivity extends AppCompatActivity {
             }
             return null;
         }
+    }
+}
+
+class ServerInterator extends AsyncTask<Void, Void, Void> {
+
+    private static final String TAG = "MainActivity";
+    private static final String FILE_NAME = "MargaretsSecretProjectv2/data.json";
+    private List<String> datas = null;
+    private ServerResponse mListener;
+
+    public ServerInterator(ServerResponse listener) {
+        this.mListener = listener;
+    }
+
+    @Override
+    protected Void doInBackground(Void... voids) {
+//        try {
+//            URL url = new URL("https://api.box.com/2.0/files/243729054955/content");
+//            Gson gson = new Gson();
+//            BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
+//            String ans = "";
+//            String str;
+//
+//            while ((str = in.readLine()) != null){
+//                ans += str;
+//            }
+//
+//            in.close();
+//
+//            Log.d(TAG, str);
+//            Log.d(TAG, "HI");
+//
+//            //datas = gson.fromJson(str, ArrayList.class);
+//
+//
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//        }
+
+        BoxAPIConnection api = new BoxAPIConnection("HVKg08klrcMP3FQqyxtqYhafVbYNDzpP");
+
+        BoxFile file = new BoxFile(api, "243729054955");
+        BoxFile.Info info = file.getInfo();
+
+        try {
+            file.download(new FileOutputStream(new File(Environment.getExternalStorageDirectory(), FILE_NAME)));
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+
+    @Override
+    protected void onPostExecute(Void aVoid) {
+        super.onPostExecute(aVoid);
+        mListener.processFinish();
+    }
+
+    public interface ServerResponse {
+        void processFinish();
     }
 }

@@ -6,60 +6,88 @@ import android.os.Environment;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
-import android.support.v4.app.FragmentPagerAdapter;
 import android.support.v4.app.FragmentStatePagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
-
-import com.box.sdk.BoxAPIConnection;
-import com.box.sdk.BoxFile;
+import android.widget.Toast;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
 public class MainActivity extends AppCompatActivity implements ServerInterator.ServerResponse {
 
     private static final String TAG = "MainActivity";
-    /**
-     * The {@link android.support.v4.view.PagerAdapter} that will provide
-     * fragments for each of the sections. We use a
-     * {@link FragmentPagerAdapter} derivative, which will keep every
-     * loaded fragment in memory. If this becomes too memory intensive, it
-     * may be best to switch to a
-     * {@link android.support.v4.app.FragmentStatePagerAdapter}.
-     */
+
     private SectionsPagerAdapter mSectionsPagerAdapter;
 
-    /**
-     * The {@link ViewPager} that will host the section contents.
-     */
     private ViewPager mViewPager;
     private List<String> data;
     private Snackbar loadingMessage;
     private boolean parentMode;
+
+    private int parentModeCounter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        parentModeCounter = 0;
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-        loadingMessage = Snackbar.make(findViewById(android.R.id.content), "Loading", Snackbar.LENGTH_INDEFINITE);
+        toolbar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
 
-        getData();
+                if (!parentMode) {
+                    parentModeCounter += 1;
+                    if (parentModeCounter >= 4) {
+                        parentMode = true;
+                        getData();
+                        parentModeCounter = 0;
+                        Toast.makeText(MainActivity.this, R.string.parent_mode_disabled, Toast.LENGTH_SHORT).show();
+
+                    }
+                } else {
+                    parentModeCounter += 1;
+                    if (parentModeCounter >= 4) {
+                        parentMode = false;
+                        getData();
+                        parentModeCounter = 0;
+                        Toast.makeText(MainActivity.this, R.string.parent_mode_enabled, Toast.LENGTH_SHORT).show();
+
+
+                    }
+                }
+
+            }
+        });
+
+        loadingMessage = Snackbar.make(findViewById(android.R.id.content), R.string.loading, Snackbar.LENGTH_INDEFINITE);
+
+        this.parentMode = false;
+
+        getDataFromServer();
 
 
     }
@@ -67,37 +95,36 @@ public class MainActivity extends AppCompatActivity implements ServerInterator.S
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.menu_main, menu);
         return true;
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
 
         //noinspection SimplifiableIfStatement
         if (id == R.id.action_refresh) {
-            loadingMessage.show();
-            new ServerInterator(this).execute();
+            getDataFromServer();
             return true;
         }
 
         return super.onOptionsItemSelected(item);
     }
 
+    private void getDataFromServer() {
+        loadingMessage.show();
+        new ServerInterator(this).execute();
+    }
+
     public void getData() {
         this.data = JSONHelper.importFromJSON(this, this);
 
+
         if (!this.parentMode) {
-            for (String s : data) {
-                if (s.substring(0, 1).equals("/")) {
-                    s = s.substring(1);
-                }
-            }
+            disableParentMode();
+        } else {
+            enableParentMode();
         }
 
         if (this.data != null) {
@@ -117,9 +144,35 @@ public class MainActivity extends AppCompatActivity implements ServerInterator.S
         loadingMessage.dismiss();
     }
 
-    /**
-     * A placeholder fragment containing a simple view.
-     */
+    private void disableParentMode() {
+        String[] dataArray = new String[data.size()];
+        for (int i = 0; i < dataArray.length; i++) {
+            dataArray[i] = data.get(i);
+        }
+
+        for (int i = 0; i < dataArray.length; i++) {
+            if (dataArray[i].substring(0, 1).equals("/")) {
+                dataArray[i] = dataArray[i].substring(1);
+            }
+        }
+
+        data = new ArrayList<>(Arrays.asList(dataArray));
+    }
+
+    private void enableParentMode() {
+        for (int i = 0; i < data.size(); i++) {
+            if (data.get(i).substring(0, 1).equals("/")) {
+                data.remove(i);
+                enableParentMode();
+            }
+        }
+    }
+
+
+
+
+
+
     public static class PlaceholderFragment extends Fragment {
         /**
          * The fragment argument representing the section number for this
@@ -152,10 +205,6 @@ public class MainActivity extends AppCompatActivity implements ServerInterator.S
         }
     }
 
-    /**
-     * A {@link FragmentPagerAdapter} that returns a fragment corresponding to
-     * one of the sections/tabs/pages.
-     */
     public class SectionsPagerAdapter extends FragmentStatePagerAdapter {
 
         private static final int LOOPS_COUNT = 1000;
@@ -163,15 +212,25 @@ public class MainActivity extends AppCompatActivity implements ServerInterator.S
 
         public SectionsPagerAdapter(FragmentManager fm, List data) {
             super(fm);
-            this.data = data;
+            this.data = randomizeList(data);
+
+        }
+
+        private List randomizeList(List data) {
+            Random rand = new Random();
+            List ans = new ArrayList();
+            for (int i = 0; i < data.size(); i++) {
+                Object temp = data.get(rand.nextInt(data.size()));
+                ans.add(temp);
+                data.remove(temp);
+            }
+            return ans;
         }
 
         @Override
         public Fragment getItem(int position) {
-            Random rand = new Random();
-
             if (data.size() > 0) {
-                return PlaceholderFragment.newInstance((String) data.get(rand.nextInt(data.size())));
+                return PlaceholderFragment.newInstance((String) data.get(position));
             } else {
                 return PlaceholderFragment.newInstance("");
             }
@@ -179,22 +238,9 @@ public class MainActivity extends AppCompatActivity implements ServerInterator.S
 
         @Override
         public int getCount() {
-            // Show 3 total pages.
             return Integer.MAX_VALUE;
         }
 
-        @Override
-        public CharSequence getPageTitle(int position) {
-            switch (position) {
-                case 0:
-                    return "SECTION 1";
-                case 1:
-                    return "SECTION 2";
-                case 2:
-                    return "SECTION 3";
-            }
-            return null;
-        }
     }
 }
 
@@ -211,37 +257,13 @@ class ServerInterator extends AsyncTask<Void, Void, Void> {
 
     @Override
     protected Void doInBackground(Void... voids) {
-//        try {
-//            URL url = new URL("https://api.box.com/2.0/files/243729054955/content");
-//            Gson gson = new Gson();
-//            BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
-//            String ans = "";
-//            String str;
-//
-//            while ((str = in.readLine()) != null){
-//                ans += str;
-//            }
-//
-//            in.close();
-//
-//            Log.d(TAG, str);
-//            Log.d(TAG, "HI");
-//
-//            //datas = gson.fromJson(str, ArrayList.class);
-//
-//
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        }
-
-        BoxAPIConnection api = new BoxAPIConnection("HVKg08klrcMP3FQqyxtqYhafVbYNDzpP");
-
-        BoxFile file = new BoxFile(api, "243729054955");
-        BoxFile.Info info = file.getInfo();
-
         try {
-            file.download(new FileOutputStream(new File(Environment.getExternalStorageDirectory(), FILE_NAME)));
+            fileFromURL("https://storage.googleapis.com/margaretmarcusv2/reasons.json");
         } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
             e.printStackTrace();
         }
 
@@ -252,6 +274,37 @@ class ServerInterator extends AsyncTask<Void, Void, Void> {
     protected void onPostExecute(Void aVoid) {
         super.onPostExecute(aVoid);
         mListener.processFinish();
+    }
+
+    public void fileFromURL(String dowloadUrl) throws IOException {
+        URL url = null;//Create Download URl
+        url = new URL(dowloadUrl);
+        HttpURLConnection c = (HttpURLConnection) url.openConnection();//Open Url Connection
+        c.setRequestMethod("GET");//Set Request Method to "GET" since we are grtting data
+        c.connect();//connect the URL Connection
+
+        if (c.getResponseCode() != HttpURLConnection.HTTP_OK) {
+            Log.e(TAG, "Server returned HTTP " + c.getResponseCode()
+                    + " " + c.getResponseMessage());
+        }
+
+        File ans = new File(Environment.getExternalStorageDirectory() + "/"
+                + JSONHelper.FILE_NAME);
+
+
+        FileOutputStream fos = new FileOutputStream(ans);//Get OutputStream for NewFile Location
+
+        InputStream is = c.getInputStream();//Get InputStream for connection
+
+        byte[] buffer = new byte[1024];//Set buffer type
+        int len1 = 0;//init length
+        while ((len1 = is.read(buffer)) != -1) {
+            fos.write(buffer, 0, len1);//Write new file
+        }
+
+        //Close all connection after doing task
+        fos.close();
+        is.close();
     }
 
     public interface ServerResponse {

@@ -22,7 +22,7 @@ import java.util.List;
 
 public class JSONHelper {
     public static final String TAG = "JSONHelper";
-    private static final String FILE_NAME = "MargaretsSecretProjectv2/data.json";
+    public static final String FILE_NAME = "MargaretsSecretProjectv2/data.json";
     private static final int REQUEST_PERMISSION_WRITE = 1002;
 
 

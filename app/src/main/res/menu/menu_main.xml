@@ -4,7 +4,17 @@
     tools:context="com.example.android.margaretssecretprojectv2.MainActivity">
     <item
         android:id="@+id/action_refresh"
-        android:orderInCategory="100"
+        android:orderInCategory="0"
         android:title="@string/action_refresh"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_color_mode"
+        android:orderInCategory="1"
+        android:title="@string/action_color_mode"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_set_notification"
+        android:orderInCategory="2"
+        android:title="@string/set_notification"
         app:showAsAction="never" />
 </menu>

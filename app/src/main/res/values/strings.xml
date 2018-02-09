@@ -5,4 +5,10 @@
     <string name="parent_mode_enabled">Parent Mode Enabled</string>
     <string name="loading">Loading...</string>
     <string name="parent_mode_disabled">Parent Mode Disabled</string>
+    <string name="title_message">I Love You Margaret! Here Are Some Reasons Why:</string>
+    <string name="action_color_mode">Colorful Mode</string>
+    <string name="color_mode_enabled">Color Mode Enabled</string>
+    <string name="color_mode_disabled">Color Mode Disabled</string>
+    <string name="no_data_found">No Data Found\\nPlease Refresh</string>
+    <string name="set_notification">Set Notification</string>
 </resources>
